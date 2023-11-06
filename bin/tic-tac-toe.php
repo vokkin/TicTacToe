@@ -1,5 +1,4 @@
 <?php
-    namespace vokkin\tic_tac_toe\Controller;
     $autoLoadGit = __DIR__.'/../vendor/autoload.php';
     $autoLoadPackgaist = __DIR__.'/../../../autoload.php';
 
