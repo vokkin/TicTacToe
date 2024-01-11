@@ -1,6 +1,6 @@
 <?php
 
-namespace vokkin\ticTacToe\View;
+namespace vokkin\tic_tac_toe\View;
 
     use function cli\prompt;
     use function cli\line;

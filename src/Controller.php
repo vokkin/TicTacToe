@@ -1,26 +1,30 @@
 <?php
 
-namespace vokkin\ticTacToe\Controller;
+namespace vokkin\tic_tac_toe\Controller;
 
-    use vokkin\ticTacToe\Model\Board as Board;
+    use vokkin\tic_tac_toe\Model\Board as Board;
     use Exception as Exception;
     use LogicException as LogicException;
+    use RedBeanPHP\R as R;
 
     use function cli\prompt;
     use function cli\line;
     use function cli\out;
 
-    use function vokkin\ticTacToe\View\showGameBoard;
-    use function vokkin\ticTacToe\View\showMessage;
-    use function vokkin\ticTacToe\View\getValue;
+    use function vokkin\tic_tac_toe\View\showGameBoard;
+    use function vokkin\tic_tac_toe\View\showMessage;
+    use function vokkin\tic_tac_toe\View\getValue;
 
-    use const vokkin\ticTacToe\Model\PLAYER_X_MARKUP;
-    use const vokkin\ticTacToe\Model\PLAYER_O_MARKUP;
+    use const vokkin\tic_tac_toe\Model\PLAYER_X_MARKUP;
+    use const vokkin\tic_tac_toe\Model\PLAYER_O_MARKUP;
 
 function startGame()
 {
+    if (file_exists("gamedb.db")) {
+        R::setup("sqlite:gamedb.db");
+    }
     while (true) {
-        $command = prompt("Enter key");
+        $command = prompt("Введите команду\n'--new' - начать новую игру;\n'--list' - показать результаты игр;\n'--replay [#]' - показать партию (#-номер партии);\n'--exit' - выход;");
         $gameBoard = new Board();
         if ($command == "--new") {
             play($gameBoard);
@@ -37,7 +41,8 @@ function startGame()
     }
 }
 
-function play($gameBoard) {
+function play($gameBoard) 
+{
     $canContinue = true;
     do {
         initialize($gameBoard);
@@ -49,8 +54,8 @@ function play($gameBoard) {
 function initialize($board)
 {
     try {
-        $board->setUserName(getValue("Enter user name"));
-        $board->setDimension(getValue("Enter game board size"));
+        $board->setUserName(getValue("Введите имя игрока "));
+        $board->setDimension(getValue("Введите размер игрового поля "));
         $board->initialize();
     } catch (Exception $e) {
         showMessage($e->getMessage());
@@ -71,7 +76,7 @@ function gameLoop($board)
     $playerName =  $board->getUser();
     $size = $board->getDimension();
 
-    $db->exec("INSERT INTO gamesInfo (
+    R::exec("INSERT INTO gamesInfo (
         gameData, 
         gameTime, 
         playerName, 
@@ -84,7 +89,7 @@ function gameLoop($board)
         '$size', 
         'НЕ ЗАКОНЧЕНО')");
 
-    $id = $db->querySingle("SELECT idGame FROM gamesInfo ORDER BY idGame DESC LIMIT 1");
+    $id = R::querySingle("SELECT idGame FROM gamesInfo ORDER BY idGame DESC LIMIT 1");
 
     $board->setId($id);
     $gameId = $board->getGameId();
@@ -92,24 +97,24 @@ function gameLoop($board)
     do {
         showGameBoard($board);
         if ($currentMarkup == $board->getUserMarkup()) {
-            $db = processUserTurn($board, $currentMarkup, $stopGame, $db);
-            $endGameMsg = "Player '$currentMarkup' wins the game.";
+            processUserTurn($board, $currentMarkup, $stopGame);
+            $endGameMsg = "Игрок '$currentMarkup' победил.";
             $currentMarkup = $board->getComputerMarkup();
         } else {
-            $db = processComputerTurn($board, $currentMarkup, $stopGame, $db);
-            $endGameMsg = "Player '$currentMarkup' wins the game.";
+            processComputerTurn($board, $currentMarkup, $stopGame);
+            $endGameMsg = "Игрок '$currentMarkup' победил.";
             $currentMarkup = $board->getUserMarkup();
         }
 
         if (!$board->isFreeSpaceEnough() && !$stopGame) {
             showGameBoard($board);
-            $endGameMsg = "Draw!";
+            $endGameMsg = "Ничья";
             $stopGame = true;
         }
     } while (!$stopGame);
 
     $temp_mark = $board->getUserMarkup();
-    if ($endGameMsg == "Player '$temp_mark' wins the game."){
+    if ($endGameMsg == "Игрок '$temp_mark' победил в партии."){
         $result = 'ПОБЕДА';
         $board->endGame($gameId, $result, $db);
     }
@@ -133,7 +138,7 @@ function processUserTurn($board, $markup, &$stopGame, $db)
             $mark = $board->getMarkup();
             $col = $coords[0] + 1;
             $row = $coords[1] + 1;
-            $db->exec("INSERT INTO stepsInfo (
+            R::exec("INSERT INTO stepsInfo (
                 idGame, 
                 playerMark, 
                 rowCoord, 
@@ -159,16 +164,16 @@ function getCoords($board)
 {
     $markup = $board->getUserMarkup();
     $name = $board->getUser();
-    $coords = getValue("Enter coords for player '$markup' (player: '$name' ) (enter through : )");
+    $coords = getValue("Введите координаты игрока '$markup' (номер строки и номер столбца через ; ) ");
     if ($coords == "--exit"){
         exit("Thanks for using");
     }
-    $coords = explode(":", $coords);
+    $coords = explode(";", $coords);
     $coords[0] = $coords[0]-1;
     if (isset($coords[1])) {
         $coords[1] = $coords[1]-1;
-    } else {    
-        throw new Exception("No second coordinate. Please try again.");
+    } else {
+        throw new Exception("Неверно введены координаты, попробуйте снова.");
     }
     return $coords;
 }
@@ -188,7 +193,7 @@ function processComputerTurn($board, $markup, &$stopGame, $db)
             if ($board->determineWinner($i, $j) !== "") {
                 $stopGame = true;
             }
-            $db->exec("INSERT INTO stepsInfo (
+            R::exec("INSERT INTO stepsInfo (
                 idGame, 
                 playerMark, 
                 rowCoord, 
@@ -208,9 +213,11 @@ function processComputerTurn($board, $markup, &$stopGame, $db)
 
 function inviteToContinue(&$canContinue)
 {
+    $db = $board->openDatabase();
+    $query = R::getAll("SELECT * FROM 'gamesInfo'");
     $answer = "";
     do {
-        $answer = getValue("Do you want to continue? (y/n)");
+        $answer = getValue("Повторить партию? (y/n)");
         if ($answer === "y") {
             $canContinue = true;
         } elseif ($answer === "n") {
@@ -222,23 +229,23 @@ function inviteToContinue(&$canContinue)
 function listGames($board)
 {
     $db = $board->openDatabase();
-    $query = $db->query('SELECT * FROM gamesInfo');
+    $query = R::query('SELECT * FROM gamesInfo');
     while ($row = $query->fetchArray()) {
-        line("ID $row[0])\n    Date:$row[1] Time: $row[2]\n    Player Name:$row[3]\n    Size :$row[4]\n    Result:$row[5]");
+        line("ID $row[0])\n    Дата:$row[1] Время: $row[2]\n    Имя игрока:$row[3]\n    Размер :$row[4]\n    Result:$row[5]");
     }
 }
 
 function replayGame($board, $id)
 {
     $db = $board->openDatabase();
-    $idGame = $db->querySingle("SELECT EXISTS(SELECT 1 FROM gamesInfo WHERE idGame='$id')");
+    $idGame = R::querySingle("SELECT EXISTS(SELECT 1 FROM gamesInfo WHERE idGame='$id')");
 
     if ($idGame == 1) {
-        $status = $db->querySingle("SELECT result from gamesInfo where idGame = '$id'");
-        $query = $db->query("SELECT rowCoord, colCoord, playerMark from stepsInfo where idGame = '$id'");
-        $dim = $db->querySingle("SELECT sizeBoard from gamesInfo where idGame = '$id'");
+        $status = R::querySingle("SELECT result from gamesInfo where idGame = '$id'");
+        $query = R::query("SELECT rowCoord, colCoord, playerMark from stepsInfo where idGame = '$id'");
+        $dim = R::querySingle("SELECT sizeBoard from gamesInfo where idGame = '$id'");
         $turn = 1;
-        line("Game status: " . $status);
+        line("Статус партии: " . $status);
         $board->setDimension($dim);
         $board->initialize();
         showGameBoard($board);
@@ -247,6 +254,6 @@ function replayGame($board, $id)
             showGameBoard($board);
         }
     } else {
-        line("Game not found!");
+        line("Партия не найдена.");
     }
 }

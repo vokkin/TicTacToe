@@ -1,10 +1,10 @@
 <?php
 
-namespace vokkin\ticTacToe\Model;
+namespace vokkin\tic_tac_toe\Model;
 
 use Exception as Exception;
 use LogicException as LogicException;
-
+use RedBeanPHP\R as R;
 const DEFAULT_DIMENSION = 3;
 const DEFAULT_MARKUP = " ";
 const PLAYER_X_MARKUP = "X";
@@ -109,10 +109,10 @@ class Board
                 $this->updateCheckArr($i, $j, $markup);
                 $this->freeSpaceCount--;
             } else {
-                throw new Exception("This place is already taken. Please try again.");
+                throw new Exception("Это место занято, попробуйте снова.");
             }
         } else {
-            throw new Exception("Incorrect coords. Please try again.");
+            throw new Exception("Не корректные координаты, попробуйте снова.");
         }
     }
 
@@ -160,16 +160,16 @@ class Board
         if (is_numeric($dim) && $dim >= 3 && $dim <= 10) {
             return $this->dimension = $dim;
         } else {
-            throw new Exception("Incorrect dimension (should be 3 <= dim <= 10). Please try again.");
+            throw new Exception("Не корректный размер поля (размер от 3 до 10). Попробуйте снова.");
         }
     }
-    
+
     public function setId($id)
     {
         if (is_numeric($id)) {
             return $this->game_id = $id;
         } else {
-            throw new Exception("Incorrect id");
+            throw new Exception("Не корректный id");
         }
     }
 
@@ -214,11 +214,11 @@ class Board
     }
 
     public function openDatabase()
-{
-    if (!file_exists("gamedb.db")) {
-        $db = new \SQLite3('gamedb.db');
+    {
+        if (!file_exists("gamedb.db")) {
+            R::setup("sqlite:gamedb.db");
 
-    $gamesInfoTable = "CREATE TABLE gamesInfo(
+            $gamesInfoTable = "CREATE TABLE gamesInfo(
         idGame INTEGER PRIMARY KEY,
         gameData DATE,
         gameTime TIME,
@@ -226,32 +226,23 @@ class Board
         sizeBoard INTEGER,
         result TEXT
     )";
-    $db->exec($gamesInfoTable);
+            R::exec($gamesInfoTable);
 
 
-    $stepsInfoTable = "CREATE TABLE stepsInfo(
+            $stepsInfoTable = "CREATE TABLE stepsInfo(
         idGame INTEGER,
         playerMark TEXT,
         rowCoord INTEGER,
         colCoord INTEGER
     )";
-    $db->exec($stepsInfoTable);
-    } else {
-        $db = new \SQLite3('gamedb.db');
-    }
-    return $db;
-}
+            R::exec($stepsInfoTable);
+        }
+    }   
 
     public function endGame($idGame, $result)
     {
-        $db = openDatabase();
-        $db->exec("UPDATE gamesInfo
-            SET result = '$result'
-            WHERE idGame = '$idGame'");
+        R::exec("UPDATE gamesInfo
+        SET result = '$result'
+        WHERE idGame = '$idGame'");
     }
-
-
 }
-
-
-
